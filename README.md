@@ -4,6 +4,8 @@ Run zod schemas on the [ata](https://github.com/ata-core/ata-validator) engine.
 The schema stays zod. The verdict comes from compiled JSON Schema validation
 where that is provably safe, and from zod itself everywhere it is not.
 
+![One zod schema, three ways to run it: measured times for accepting and rejecting documents, in Node and with code generation blocked](https://raw.githubusercontent.com/ata-core/ata-zod/main/assets/bench.png)
+
 ```js
 import { z } from 'zod'
 import { compile } from '@ata-project/zod'

@@ -36,5 +36,8 @@
     "ata-validator": "^1.13.0",
     "typescript": "^7.0.2",
     "zod": "^4.5.4"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

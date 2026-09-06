@@ -1,0 +1,39 @@
+{
+  "name": "@ata-project/zod",
+  "version": "0.1.0",
+  "description": "Run zod schemas on the ata engine: same answers as zod, verdicts decided by compiled JSON Schema validation, refinements handed back to zod.",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "README.md"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "test": "node test.js && node --disallow-code-generation-from-strings test.js && npm run test:types",
+    "bench": "node bench.mjs",
+    "test:types": "tsc --noEmit -p tsconfig.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ata-core/ata-zod"
+  },
+  "keywords": [
+    "zod",
+    "ata-validator",
+    "json-schema",
+    "validation",
+    "standard-schema"
+  ],
+  "peerDependencies": {
+    "ata-validator": ">=1.12.1",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "ata-validator": "^1.13.0",
+    "typescript": "^7.0.2",
+    "zod": "^4.5.4"
+  }
+}

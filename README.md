@@ -87,6 +87,40 @@ runtime blocks it (`node --disallow-code-generation-from-strings`):
 of uncompiled zod. ata falls back to its interpreted engine, which passes the
 same official JSON Schema test suite as its compiled one.
 
+## Raw bytes
+
+`isValidBytes` answers from a `Buffer`, `Uint8Array` or JSON string without
+`JSON.parse` and without materializing a JavaScript object, something zod has
+no path for at all:
+
+```js
+const check = compile(schema)
+check.isValidBytes(request.rawBody)   // boolean, straight from the bytes
+```
+
+On an `engine: 'ata'` schema with the native engine present, the verdict comes
+from a SIMD walk of the buffer. The same array-of-objects schema as above,
+interleaved medians of 7 rounds, first element invalid on the reject rows:
+
+| payload | zod parse + safeParse | `isValidBytes` |
+|---|---|---|
+| 0.2 KB, accept | 0.9 us | **0.6 us** |
+| 0.2 KB, reject | 1.6 us | **0.6 us** |
+| 22.7 KB, accept | 79.2 us | **47.6 us** |
+| 22.7 KB, reject | 81.0 us | **45.6 us** |
+| 229 KB, accept | 793 us | **489 us** |
+| 229 KB, reject | 791 us | **482 us** |
+
+Bytes that are not valid JSON return `false` rather than throwing. The verdict
+agrees with `safeParse` on the parsed value; the differential suite compares
+the two on every JSON-representable value it generates.
+
+Plainly: this is a verdict, not a parse. When you need the value, you still
+parse and `safeParse` it, and `hybrid` and `zod` mode schemas, and installs
+without the native engine, do exactly that under the hood. The API is worth
+having where rejection is the common case: gateways, webhook endpoints and
+queue consumers that drop bad messages before doing any further work.
+
 ## Limitations, plainly
 
 - Accepted values in `hybrid` mode and every value in `zod` mode run zod, so

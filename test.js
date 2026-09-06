@@ -73,6 +73,18 @@ function differential (name, schema, samples, expectedMode) {
     if (got !== want) {
       throw new Error(name + ': isValid disagrees with zod on ' + JSON.stringify(v) + ' (zod ' + want + ', got ' + got + ')')
     }
+    const json = JSON.stringify(v)
+    if (json !== undefined) {
+      const reparsed = JSON.parse(json)
+      const wantBytes = schema.safeParse(reparsed).success
+      const gotBytes = compiled.isValidBytes(Buffer.from(json))
+      if (gotBytes !== wantBytes) {
+        throw new Error(name + ': isValidBytes disagrees with zod on ' + json + ' (zod ' + wantBytes + ', got ' + gotBytes + ')')
+      }
+      if (compiled.isValidBytes(json) !== wantBytes) {
+        throw new Error(name + ': isValidBytes(string) disagrees on ' + json)
+      }
+    }
     const sp = compiled.safeParse(v)
     if (sp.success !== want) {
       throw new Error(name + ': safeParse disagrees with zod on ' + JSON.stringify(v))
@@ -194,6 +206,14 @@ differential('refined root', z.number().refine((n) => n !== 13), [7, 13], 'hybri
   const bad = c['~standard'].validate({ n: 0 })
   ok('standard: rejects with issues', Array.isArray(bad.issues) && bad.issues.length > 0)
   ok('standard: issue has path', bad.issues[0].path[0] === 'n')
+}
+
+// 5b. bytes that are not JSON are rejected, never thrown
+{
+  const c = compile(z.object({ n: z.number() }))
+  ok('bytes: truncated JSON rejects', c.isValidBytes(Buffer.from('{"n": 1')) === false)
+  ok('bytes: empty buffer rejects', c.isValidBytes(Buffer.from('')) === false)
+  ok('bytes: garbage rejects', c.isValidBytes('not json at all') === false)
 }
 
 // 6. classification is conservative for the unknown

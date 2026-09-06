@@ -171,6 +171,27 @@ function compile (schema, opts) {
     isValid = (d) => schema.safeParse(d).success
   }
 
+  // Raw bytes: an engine:'ata' schema is decided without JSON.parse, straight
+  // off the buffer by the native walker when it is present. The other modes
+  // need the materialized value for zod, and so does a pure-JS install, so
+  // they parse and take the object path. Bytes that are not JSON are a
+  // rejection, not an exception.
+  let isValidBytes
+  if (analysis.mode === 'ata' && engine && typeof engine.isValid === 'function') {
+    isValidBytes = (input) => engine.isValid(input)
+  } else {
+    const td = new TextDecoder()
+    isValidBytes = (input) => {
+      let value
+      try {
+        value = JSON.parse(typeof input === 'string' ? input : td.decode(input))
+      } catch {
+        return false
+      }
+      return isValid(value)
+    }
+  }
+
   // The parsed value is zod's to make: plain z.object strips unknown keys,
   // defaults fill, transforms rewrite, so an accepted value always runs zod
   // and comes back exactly as zod would return it. What ata owns is the
@@ -197,6 +218,7 @@ function compile (schema, opts) {
 
   const compiled = {
     isValid,
+    isValidBytes,
     safeParse,
     parse: (d) => {
       const r = safeParse(d)

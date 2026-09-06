@@ -23,6 +23,12 @@ export type SafeParseResult<S extends ZodType> =
 export interface CompiledZod<S extends ZodType> {
   /** The verdict, at ata speed where the classification allows it. */
   isValid(data: unknown): boolean
+  /**
+   * Verdict on raw bytes or a JSON string. An engine:'ata' schema is decided
+   * without JSON.parse when the native engine is present; other modes and
+   * pure-JS installs parse first. Bytes that are not JSON return false.
+   */
+  isValidBytes(input: Uint8Array | string): boolean
   /** zod-shaped result. Accepted values run zod, so `data` is exactly what
    * zod returns (unknown keys stripped, defaults filled, transforms applied).
    * Rejections are decided by ata; the ZodError is built on first read. */

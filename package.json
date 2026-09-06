@@ -1,6 +1,6 @@
 {
   "name": "@ata-project/zod",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Run zod schemas on the ata engine: same answers as zod, verdicts decided by compiled JSON Schema validation, refinements handed back to zod.",
   "main": "index.js",
   "types": "index.d.ts",

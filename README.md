@@ -59,14 +59,14 @@ and runs the whole suite a second time with code generation blocked.
 
 One representative API-boundary object schema (nine fields, nested arrays of
 objects, enum, union), interleaved medians of 7 rounds on an M-series Mac,
-Node 25, zod 4.5.4, ata-validator 1.13.1:
+Node 25, zod 4.6.5, ata-validator 1.25.0:
 
 | | zod `safeParse` | `z.compile` | this package |
 |---|---|---|---|
-| accept, verdict only | 526 ns | 45 ns | **21 ns** |
-| reject, verdict only | 1419 ns | 1429 ns | **5 ns** |
-| reject, `safeParse` | 1419 ns | 1429 ns | **6.7 ns** |
-| accept, `safeParse` | 526 ns | 45 ns | 542 ns |
+| accept, verdict only | 512 ns | 43 ns | **20 ns** |
+| reject, verdict only | 811 ns | 823 ns | **5 ns** |
+| reject, `safeParse` | 811 ns | 823 ns | **6.5 ns** |
+| accept, `safeParse` | 512 ns | 43 ns | 518 ns |
 
 The last row is by design, not a gap: an accepted value's output is zod's to
 make. Plain `z.object` strips unknown keys, defaults fill, transforms rewrite,
@@ -80,8 +80,8 @@ runtime blocks it (`node --disallow-code-generation-from-strings`):
 
 | | zod `safeParse` | `z.compile` | this package |
 |---|---|---|---|
-| accept, verdict only | 1269 ns | 1281 ns | **641 ns** |
-| reject, verdict only | 2267 ns | 2250 ns | **112 ns** |
+| accept, verdict only | 1260 ns | 1245 ns | **644 ns** |
+| reject, verdict only | 1651 ns | 1675 ns | **107 ns** |
 
 `z.compile` does not fail there, but its advantage does: it runs at the speed
 of uncompiled zod. ata falls back to its interpreted engine, which passes the
@@ -100,7 +100,8 @@ check.isValidBytes(request.rawBody)   // boolean, straight from the bytes
 
 On an `engine: 'ata'` schema with the native engine present, the verdict comes
 from a SIMD walk of the buffer. The same array-of-objects schema as above,
-interleaved medians of 7 rounds, first element invalid on the reject rows:
+interleaved medians of 7 rounds, first element invalid on the reject rows,
+measured on zod 4.5.4 and ata-validator 1.13.1:
 
 | payload | zod parse + safeParse | `isValidBytes` |
 |---|---|---|

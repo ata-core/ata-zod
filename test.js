@@ -137,6 +137,13 @@ differential('default fills nothing on verdicts', z.object({ n: z.number().defau
   { s: 'only' },
 ])
 
+// Value-rewriting checks do not reach the JSON Schema and move zod both ways:
+// trim() then min(1) rejects "  ", which the schema accepts; trim() then max(3)
+// accepts "abc  ", which the schema rejects. zod answers these alone.
+differential('trim then min', z.object({ a: z.string().trim().min(1) }), [{ a: ' x ' }, { a: '  ' }], 'zod')
+differential('trim then max', z.object({ a: z.string().trim().max(3) }), [{ a: 'abc  ' }, { a: 'abcd' }], 'zod')
+differential('lowercase rewrite', z.object({ a: z.string().toLowerCase().regex(/^[a-z]+$/) }), [{ a: 'ABC' }], 'zod')
+
 // 2. residue: ata rejects fast, zod owns acceptance
 differential('object refine', z.object({ lo: z.number(), hi: z.number() }).refine((o) => o.lo <= o.hi), [
   { lo: 1, hi: 2 },

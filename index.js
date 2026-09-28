@@ -94,6 +94,12 @@ function analyze (schema) {
         // Custom checks (.refine, .superRefine, .check) never reach the JSON
         // Schema; everything else zod emits as a constraint.
         if (kind === 'custom') escalate('hybrid', 'refine at ' + type)
+        // .trim(), .toLowerCase() and the like rewrite the value before the
+        // checks after them run, and do not reach the JSON Schema. zod can then
+        // accept what the schema rejects ("abc  " under trim().max(3)) and
+        // reject what it accepts ("  " under trim().min(1)), so neither side
+        // of ata's answer is sound.
+        if (kind === 'overwrite') { escalate('zod', 'overwrite at ' + type); producesValue = true }
       }
     }
 

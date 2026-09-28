@@ -50,7 +50,7 @@ walking zod's own definition tree before anything runs:
 The classification is conservative: an unrecognised node lands in `zod` mode,
 so a new zod feature can make this package slower, never wrong. The test suite
 holds `isValid`, `safeParse` and the parsed value against zod itself over
-13,000 generated values across all three modes, including recursive schemas,
+15,000 generated values across all three modes, including recursive schemas,
 and runs the whole suite a second time with code generation blocked.
 
 `compiled.engine` tells you which mode you got, `compiled.reasons` says why.
@@ -59,14 +59,14 @@ and runs the whole suite a second time with code generation blocked.
 
 One representative API-boundary object schema (nine fields, nested arrays of
 objects, enum, union), interleaved medians of 7 rounds on an M-series Mac,
-Node 25, zod 4.6.5, ata-validator 1.33.0, median of three runs:
+Node 25, zod 4.6.5, ata-validator 1.36.0, median of three runs:
 
 | | zod `safeParse` | `z.compile` | this package |
 |---|---|---|---|
-| accept, verdict only | 521 ns | 44 ns | **23 ns** |
-| reject, verdict only | 807 ns | 828 ns | **6 ns** |
-| reject, `safeParse` | 807 ns | 828 ns | **8.5 ns** |
-| accept, `safeParse` | 521 ns | 44 ns | 52.5 ns |
+| accept, verdict only | 527 ns | 44 ns | **23 ns** |
+| reject, verdict only | 822 ns | 851 ns | **6 ns** |
+| reject, `safeParse` | 822 ns | 851 ns | **8.3 ns** |
+| accept, `safeParse` | 527 ns | 44 ns | 54.3 ns |
 
 An accepted value is built by ata's `parse()` wherever the classifier proves
 it comes out exactly as zod would build it: plain objects whose optional keys
@@ -85,8 +85,8 @@ runtime blocks it (`node --disallow-code-generation-from-strings`):
 
 | | zod `safeParse` | `z.compile` | this package |
 |---|---|---|---|
-| accept, verdict only | 1267 ns | 1271 ns | **818 ns** |
-| reject, verdict only | 1661 ns | 1663 ns | **157 ns** |
+| accept, verdict only | 1290 ns | 1273 ns | **651 ns** |
+| reject, verdict only | 1695 ns | 1700 ns | **113 ns** |
 
 `z.compile` does not fail there, but its advantage does: it runs at the speed
 of uncompiled zod. ata falls back to its interpreted engine, which passes the

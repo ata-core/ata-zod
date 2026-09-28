@@ -26,7 +26,7 @@ const user = z.object({
 const check = compile(user)
 
 check.isValid(data)      // boolean, ata answers
-check.safeParse(data)    // zod-shaped result, zod-produced value
+check.safeParse(data)    // zod-shaped result, the value zod would return
 check.parse(data)        // throws a real ZodError
 ```
 
@@ -59,29 +59,34 @@ and runs the whole suite a second time with code generation blocked.
 
 One representative API-boundary object schema (nine fields, nested arrays of
 objects, enum, union), interleaved medians of 7 rounds on an M-series Mac,
-Node 25, zod 4.6.5, ata-validator 1.25.0:
+Node 25, zod 4.6.5, ata-validator 1.33.0, median of three runs:
 
 | | zod `safeParse` | `z.compile` | this package |
 |---|---|---|---|
-| accept, verdict only | 512 ns | 43 ns | **20 ns** |
-| reject, verdict only | 811 ns | 823 ns | **5 ns** |
-| reject, `safeParse` | 811 ns | 823 ns | **6.5 ns** |
-| accept, `safeParse` | 512 ns | 43 ns | 518 ns |
+| accept, verdict only | 521 ns | 44 ns | **23 ns** |
+| reject, verdict only | 807 ns | 828 ns | **6 ns** |
+| reject, `safeParse` | 807 ns | 828 ns | **8.5 ns** |
+| accept, `safeParse` | 521 ns | 44 ns | 52.5 ns |
 
-The last row is by design, not a gap: an accepted value's output is zod's to
-make. Plain `z.object` strips unknown keys, defaults fill, transforms rewrite,
-so `safeParse` hands every accepted value to zod and returns exactly what zod
-returns. What this package owns is the verdict and the rejection: `isValid`
-never runs zod in `ata` mode, and a rejected `safeParse` builds its `ZodError`
-only when somebody reads it, by running zod once at that moment.
+An accepted value is built by ata's `parse()` wherever the classifier proves
+it comes out exactly as zod would build it: plain objects whose optional keys
+follow the required ones, arrays, primitives and unions of primitives, with
+nothing that fills a default, rewrites a value or keeps undeclared keys. The
+differential suite holds that value to zod's, key order included. Anything
+else, a default, a transform, a record, a union of objects, a loose object,
+hands the accepted value to zod, which returns exactly what it always did.
+This needs ata-validator 1.33.0 or later, which copies arrays instead of
+sharing them with the input; with an older ata every accepted value goes to
+zod. `isValid` never runs zod in `ata` mode, and a rejected `safeParse` builds
+its `ZodError` only when somebody reads it, by running zod once at that moment.
 
 With code generation blocked, the way a strict CSP or a locked-down edge
 runtime blocks it (`node --disallow-code-generation-from-strings`):
 
 | | zod `safeParse` | `z.compile` | this package |
 |---|---|---|---|
-| accept, verdict only | 1260 ns | 1245 ns | **644 ns** |
-| reject, verdict only | 1651 ns | 1675 ns | **107 ns** |
+| accept, verdict only | 1267 ns | 1271 ns | **818 ns** |
+| reject, verdict only | 1661 ns | 1663 ns | **157 ns** |
 
 `z.compile` does not fail there, but its advantage does: it runs at the speed
 of uncompiled zod. ata falls back to its interpreted engine, which passes the
@@ -124,8 +129,13 @@ queue consumers that drop bad messages before doing any further work.
 
 ## Limitations, plainly
 
-- Accepted values in `hybrid` mode and every value in `zod` mode run zod, so
-  those paths are zod-speed. The win is the rejection and the pure-schema case.
+- Accepted values in `hybrid` mode, accepted values whose shape ata cannot
+  build exactly as zod does, and every value in `zod` mode run zod, so those
+  paths are zod-speed.
+- Value-rewriting checks such as `.trim()` and `.toLowerCase()` put a schema in
+  `zod` mode. They do not reach the JSON Schema, and they can make zod accept
+  what the schema rejects as well as the other way round. 0.2.1 and earlier
+  missed them and could answer `isValid` wrongly; upgrade if you use them.
 - `validate()` reports ata's errors for the schema-representable part, which
   are JSON Schema errors, not `ZodError` issues. Use `safeParse` when you need
   zod's error shape.

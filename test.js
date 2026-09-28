@@ -92,6 +92,8 @@ function differential (name, schema, samples, expectedMode) {
     if (want && sp.success) {
       const ref = schema.safeParse(v)
       assert.deepStrictEqual(sp.data, ref.data, name + ': parsed value differs from zod for ' + JSON.stringify(v))
+      // deepStrictEqual ignores key order; a caller serialising the value does not.
+      assert.strictEqual(JSON.stringify(sp.data), JSON.stringify(ref.data), name + ': parsed key order differs from zod for ' + JSON.stringify(v))
     }
   }
   passed++
@@ -143,6 +145,43 @@ differential('default fills nothing on verdicts', z.object({ n: z.number().defau
 differential('trim then min', z.object({ a: z.string().trim().min(1) }), [{ a: ' x ' }, { a: '  ' }], 'zod')
 differential('trim then max', z.object({ a: z.string().trim().max(3) }), [{ a: 'abc  ' }, { a: 'abcd' }], 'zod')
 differential('lowercase rewrite', z.object({ a: z.string().toLowerCase().regex(/^[a-z]+$/) }), [{ a: 'ABC' }], 'zod')
+
+// Where ata builds the value zod would, safeParse takes ata's copy and never
+// runs zod on an accepted value; where it cannot, zod still builds it.
+{
+  const plain = z.object({ id: z.number().int(), tags: z.array(z.string()), inner: z.strictObject({ ok: z.boolean() }), note: z.string().optional() })
+  const c = compile(plain)
+  let zodCalls = 0
+  const real = plain.safeParse.bind(plain)
+  plain.safeParse = (d) => { zodCalls++; return real(d) }
+  const r = c.safeParse({ id: 1, tags: ['a'], inner: { ok: true }, extra: 1 })
+  ok('plain schema: accepted', r.success === true)
+  // ata builds the value only where its copy matches zod's: parse() exists and
+  // hands back fresh arrays (ata-validator 1.33.0 on), and code generation is
+  // allowed. Anywhere else zod builds it. The probe here is independent of the
+  // one in index.js, so a broken probe there cannot make this pass.
+  let copiesLikeZod = false
+  try {
+    const { Validator } = require('ata-validator')
+    const input = { a: ['x'] }
+    copiesLikeZod = new Validator({ type: 'object', properties: { a: { type: 'array', items: { type: 'string' } } } }).parse(input).a !== input.a
+  } catch {}
+  if (copiesLikeZod) ok('plain schema: value built by ata, zod not called (' + zodCalls + ')', zodCalls === 0)
+  else ok('plain schema, this ata cannot copy like zod: zod builds the value (' + zodCalls + ')', zodCalls === 1)
+  ok('plain schema: unknown key stripped like zod', JSON.stringify(r.data) === JSON.stringify({ id: 1, tags: ['a'], inner: { ok: true } }))
+  const withDefault = z.object({ n: z.number().default(7) })
+  const cd = compile(withDefault)
+  let dCalls = 0
+  const realD = withDefault.safeParse.bind(withDefault)
+  withDefault.safeParse = (d) => { dCalls++; return realD(d) }
+  ok('default: value still built by zod', cd.safeParse({}).data.n === 7 && dCalls === 1)
+  const union = z.object({ u: z.union([z.object({ a: z.number() }), z.object({ b: z.string() })]) })
+  const cu = compile(union)
+  let uCalls = 0
+  const realU = union.safeParse.bind(union)
+  union.safeParse = (d) => { uCalls++; return realU(d) }
+  ok('union: value still built by zod', cu.safeParse({ u: { b: 'x', c: 1 } }).success && uCalls === 1)
+}
 
 // 2. residue: ata rejects fast, zod owns acceptance
 differential('object refine', z.object({ lo: z.number(), hi: z.number() }).refine((o) => o.lo <= o.hi), [

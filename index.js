@@ -53,11 +53,24 @@ const UNSOUND = new Set(['catch', 'success'])
 
 const CHILD_KEYS = ['innerType', 'element', 'in', 'out', 'left', 'right', 'valueType', 'keyType']
 
+// Nodes whose parsed value ata's parse() builds exactly as zod does: a plain
+// object keeps its declared keys in declared order and drops the rest, an
+// array is copied element by element, a primitive is itself. A union picks
+// its value by which branch matched, a record keeps undeclared keys, `any`
+// hands the input back by reference; those stay zod's to build.
+const VALUE_EXACT = new Set([
+  'string', 'number', 'int', 'boolean', 'null', 'literal', 'enum',
+  'object', 'array', 'optional', 'nullable', 'readonly',
+])
+
+const PRIMITIVE = new Set(['string', 'number', 'int', 'boolean', 'null', 'literal', 'enum'])
+
 function analyze (schema) {
   const seen = new Set()
   const reasons = []
   let mode = 'ata'
   let producesValue = false
+  let valueExact = true
 
   const escalate = (to, why) => {
     if (to === 'zod') mode = 'zod'
@@ -86,6 +99,25 @@ function analyze (schema) {
     else if (!EXACT.has(type)) escalate('zod', 'unrecognised node ' + type)
 
     if (type === 'default' || type === 'prefault' || type === 'pipe' || type === 'catch') producesValue = true
+    // A union of primitives yields the input itself, whichever branch
+    // matched, so there is nothing for zod to choose; any other union picks
+    // its value by branch and stays zod's.
+    const primitiveUnion = type === 'union' && Array.isArray(def.options) && def.options.every((o) => o._zod && PRIMITIVE.has(o._zod.def.type))
+    if (!VALUE_EXACT.has(type) && !primitiveUnion) valueExact = false
+    // A loose object or a catchall keeps undeclared keys; a strict one has a
+    // `never` catchall and rejects them, which leaves the declared keys.
+    if (type === 'object' && def.catchall && !(def.catchall._zod && def.catchall._zod.def.type === 'never')) valueExact = false
+    // ata's copy writes the required keys in declared order and then the
+    // optional ones; zod writes whichever are present in declared order. The
+    // two agree only while no required key follows an optional one.
+    if (type === 'object' && def.shape) {
+      let sawOptional = false
+      for (const k of Object.keys(def.shape)) {
+        const optional = def.shape[k]._zod && def.shape[k]._zod.optin === 'optional'
+        if (optional) sawOptional = true
+        else if (sawOptional) { valueExact = false; break }
+      }
+    }
 
     if (def.checks) {
       for (const c of def.checks) {
@@ -114,7 +146,7 @@ function analyze (schema) {
   }
 
   walk(schema)
-  return { mode, reasons, producesValue }
+  return { mode, reasons, producesValue, valueExact: valueExact && mode === 'ata' && !producesValue }
 }
 
 // ---------------------------------------------------------------------------
@@ -158,6 +190,26 @@ Object.defineProperty(LazyRejection.prototype, 'error', {
     return this._error
   },
 })
+
+// Whether this ata builds values the way zod does: parse() exists, and an
+// array comes back as a new array, as zod returns it, rather than the input's
+// own. Older releases shared it. Probed once, with a schema of its own; where
+// code generation is blocked parse() declines and the answer is no.
+let _copiesLikeZod
+function ataCopiesLikeZod () {
+  if (_copiesLikeZod === undefined) {
+    _copiesLikeZod = false
+    try {
+      const v = new Validator({ type: 'object', properties: { a: { type: 'array', items: { type: 'string' } } } })
+      if (typeof v.parse === 'function') {
+        const input = { a: ['x'] }
+        const out = v.parse(input)
+        _copiesLikeZod = out.a !== input.a && out.a.length === 1
+      }
+    } catch {}
+  }
+  return _copiesLikeZod
+}
 
 function compile (schema, opts) {
   const options = opts || {}
@@ -203,9 +255,34 @@ function compile (schema, opts) {
   // and comes back exactly as zod would return it. What ata owns is the
   // rejection: it is decided at ata speed, and the ZodError is built only if
   // somebody reads it, by running zod once at that moment.
-  const safeParse = (d) => {
+  let safeParse = (d) => {
     if (fast && !fast(d)) return new LazyRejection(schema, engine, d)
     return schema.safeParse(d)
+  }
+  // Where the classifier proves ata builds the same value zod would (plain
+  // objects, arrays and primitives, nothing that rewrites or fills), ata's
+  // parse() answers alone: one pass that checks and copies, instead of ata's
+  // check followed by zod's whole parse. Validator options can change what
+  // parse() returns, and an ata that predates parse() cannot answer, so those
+  // keep zod. So does a schema ata's copy declines, from its first call on.
+  if (analysis.valueExact && engine && !options.validator && ataCopiesLikeZod()) {
+    const zodParse = safeParse
+    let declined = false
+    // The verdict runs first so a rejection never reaches parse(), which
+    // throws with the full error list and a stack trace: on a rejected order
+    // that was 26 microseconds against 4.5 for this path.
+    safeParse = (d) => {
+      if (!fast(d)) return new LazyRejection(schema, engine, d)
+      if (declined) return schema.safeParse(d)
+      let data
+      try {
+        data = engine.parse(d)
+      } catch (e) {
+        if (e instanceof TypeError) { declined = true; return zodParse(d) }
+        throw e
+      }
+      return { success: true, data }
+    }
   }
 
   // ata's error report for the schema-representable part; zod's issues where

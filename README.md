@@ -59,14 +59,14 @@ and runs the whole suite a second time with code generation blocked.
 
 One representative API-boundary object schema (nine fields, nested arrays of
 objects, enum, union), interleaved medians of 7 rounds on an M-series Mac,
-Node 25, zod 4.6.5, ata-validator 1.36.0, median of three runs:
+Node 25, zod 4.6.5, ata-validator 1.62.0, median of three runs:
 
 | | zod `safeParse` | `z.compile` | this package |
 |---|---|---|---|
-| accept, verdict only | 527 ns | 44 ns | **23 ns** |
-| reject, verdict only | 822 ns | 851 ns | **6 ns** |
-| reject, `safeParse` | 822 ns | 851 ns | **8.3 ns** |
-| accept, `safeParse` | 527 ns | 44 ns | 54.3 ns |
+| accept, verdict only | 525.6 ns | 45.3 ns | **20.6 ns** |
+| reject, verdict only | 822.3 ns | 830.4 ns | **5.8 ns** |
+| reject, `safeParse` | 822.3 ns | 830.4 ns | **7.6 ns** |
+| accept, `safeParse` | 525.6 ns | 45.3 ns | 45.5 ns |
 
 An accepted value is built by ata's `parse()` wherever the classifier proves
 it comes out exactly as zod would build it: plain objects whose optional keys

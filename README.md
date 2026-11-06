@@ -59,14 +59,15 @@ and runs the whole suite a second time with code generation blocked.
 
 One representative API-boundary object schema (nine fields, nested arrays of
 objects, enum, union), interleaved medians of 7 rounds on an M-series Mac,
-Node 25, zod 4.6.5, ata-validator 1.62.0, median of three runs:
+Node 25, zod 4.6.5, @ata-project/zod 0.3.1, ata-validator 1.63.1, median of
+three runs on 2026-11-06:
 
 | | zod `safeParse` | `z.compile` | this package |
 |---|---|---|---|
-| accept, verdict only | 525.6 ns | 45.3 ns | **20.6 ns** |
-| reject, verdict only | 822.3 ns | 830.4 ns | **5.8 ns** |
-| reject, `safeParse` | 822.3 ns | 830.4 ns | **7.6 ns** |
-| accept, `safeParse` | 525.6 ns | 45.3 ns | 45.5 ns |
+| accept, verdict only | 538 ns | 48 ns | **21.4 ns** |
+| reject, verdict only | 838 ns | 844 ns | **5.9 ns** |
+| reject, `safeParse` | 838 ns | 844 ns | **7.6 ns** |
+| accept, `safeParse` | 538 ns | 48 ns | 46.8 ns |
 
 An accepted value is built by ata's `parse()` wherever the classifier proves
 it comes out exactly as zod would build it: plain objects whose optional keys
@@ -91,6 +92,21 @@ runtime blocks it (`node --disallow-code-generation-from-strings`):
 `z.compile` does not fail there, but its advantage does: it runs at the speed
 of uncompiled zod. ata falls back to its interpreted engine, which passes the
 same official JSON Schema test suite as its compiled one.
+
+## Build time, no zod on the page
+
+This package runs zod's schema on ata's engine at runtime, so the page carries
+both. A page that only needs the verdict can drop both: the `zod` option of
+[@ata-project/unplugin](https://github.com/ata-core/unplugin-ata#keep-your-schema-library-lose-it-from-the-page)
+(0.13.0, in Vite, Webpack, Rollup, Rolldown, esbuild, Rspack and Bun) loads
+the modules that export your zod 4 schemas at build time, converts each with
+`z.toJSONSchema` and writes a compiled `{ validate, isValidObject }` beside
+the module, typed as `z.input<...>`. Measured on three event schemas,
+esbuild minified and gzipped, ata-validator 1.63.1 and zod 4.6.7: the page
+carries 3.9 KB with the compiled validators and 93.0 KB with zod. A
+`.refine` or `.transform` that reads only its own parameter is carried;
+one that closes over an outside name, a `superRefine` or a `preprocess`
+stops the build by export and path rather than being dropped.
 
 ## Raw bytes
 
